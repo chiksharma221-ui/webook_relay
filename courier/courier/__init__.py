@@ -1,0 +1,2 @@
+"""Courier: reliable webhook delivery."""
+__version__ = "1.0.0"

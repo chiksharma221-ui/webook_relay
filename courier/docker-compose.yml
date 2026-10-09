@@ -1,0 +1,78 @@
+# Full stack:   docker compose up --build
+#   Dashboard   http://localhost:8000
+#   API docs    http://localhost:8000/docs
+#
+# Chaos test:   docker compose --profile chaos run --rm chaos
+# Prometheus:   docker compose --profile observability up -d   (http://localhost:9090)
+
+x-courier-env: &courier-env
+  DATABASE_URL: postgresql://postgres:postgres@postgres:5432/courier
+  # The chaos receiver lives on the private Docker network, so the SSRF guard
+  # must allow private addresses here. Never set this in production.
+  COURIER_ALLOW_PRIVATE_URLS: "true"
+  # Demo timing: retries 1s, 2s, 4s... instead of 5s, 30s, 2m... so a chaos
+  # run finishes in minutes. Remove these two lines for production defaults.
+  COURIER_RETRY_SCHEDULE: "1,2,4,8,15,30"
+  COURIER_CIRCUIT_COOLDOWN: "5"
+  COURIER_REQUEST_TIMEOUT: "5"
+  COURIER_LEASE_SECONDS: "30"
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: courier
+    command: ["postgres", "-c", "max_connections=200"]
+    ports: ["5432:5432"]
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/init-test-db.sql:/docker-entrypoint-initdb.d/init-test-db.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      interval: 2s
+      timeout: 3s
+      retries: 30
+
+  api:
+    build: .
+    command: ["python", "-m", "courier", "api"]
+    environment: *courier-env
+    ports: ["8000:8000"]
+    depends_on:
+      postgres: { condition: service_healthy }
+
+  worker:
+    build: .
+    command: ["python", "-m", "courier", "worker"]
+    environment: *courier-env
+    depends_on:
+      postgres: { condition: service_healthy }
+      api: { condition: service_started }
+    deploy:
+      replicas: 2   # scale freely: docker compose up --scale worker=4
+
+  receiver:
+    build: .
+    command: ["uvicorn", "chaos.receiver:app", "--host", "0.0.0.0", "--port", "9000", "--log-level", "warning"]
+    ports: ["9000:9000"]
+
+  chaos:
+    build: .
+    profiles: ["chaos"]
+    command: ["python", "-m", "chaos.run", "--api", "http://api:8000", "--receiver", "http://receiver:9000",
+              "--events", "2000", "--outage-seconds", "40", "--poll", "10"]
+    volumes:
+      - ./chaos/results:/app/chaos/results
+    depends_on: [api, worker, receiver]
+
+  prometheus:
+    image: prom/prometheus:latest
+    profiles: ["observability"]
+    volumes:
+      - ./docker/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports: ["9090:9090"]
+    depends_on: [api]
+
+volumes:
+  pgdata:

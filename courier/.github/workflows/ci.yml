@@ -1,0 +1,76 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: courier_test
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      TEST_DATABASE_URL: postgresql://postgres:postgres@localhost:5432/courier_test
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements-dev.txt
+      - name: Unit and integration tests (real PostgreSQL)
+        run: python -m pytest -q
+
+  chaos:
+    # Every push proves the system still loses nothing under failure.
+    needs: test
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: courier
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 2s --health-timeout 3s --health-retries 30
+    env:
+      DATABASE_URL: postgresql://postgres:postgres@localhost:5432/courier
+      COURIER_ALLOW_PRIVATE_URLS: "true"
+      COURIER_RETRY_SCHEDULE: "1,2,4,8,15"
+      COURIER_CIRCUIT_COOLDOWN: "3"
+      COURIER_REQUEST_TIMEOUT: "5"
+      COURIER_LEASE_SECONDS: "15"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+      - run: pip install -r requirements.txt
+      - name: Start API, two workers and the chaos receiver
+        run: |
+          python -m courier api --port 8000 > api.log 2>&1 &
+          sleep 5
+          python -m courier worker > worker1.log 2>&1 &
+          python -m courier worker > worker2.log 2>&1 &
+          uvicorn chaos.receiver:app --port 9000 --log-level warning > receiver.log 2>&1 &
+          sleep 3
+          curl -sf http://localhost:8000/health
+      - name: Chaos test (fails the build if anything is lost)
+        run: python -m chaos.run --events 500 --outage-seconds 15 --poll 5 --timeout 300
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: chaos-results
+          path: |
+            chaos/results/
+            *.log

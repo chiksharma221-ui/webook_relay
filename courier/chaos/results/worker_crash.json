@@ -1,0 +1,58 @@
+{
+  "run_at": "2026-10-06T16:33:55+00:00",
+  "events": 3000,
+  "deliveries": 12000,
+  "outage_seconds": 20.0,
+  "mode": "steady 100/s",
+  "ingest_events_per_s": 100.0,
+  "total_seconds": 160.4,
+  "sender_retries_deduplicated": 145,
+  "verdict": "PASS",
+  "lost": 0,
+  "endpoints": [
+    {
+      "endpoint": "healthy",
+      "expected": 3000,
+      "delivered": 3000,
+      "missing": 0,
+      "http_requests": 3000,
+      "duplicates_seen": 0,
+      "bad_signatures": 0,
+      "p50_ms": 6.494879722595215,
+      "p95_ms": 513.7429237365723
+    },
+    {
+      "endpoint": "flaky",
+      "expected": 3000,
+      "delivered": 3000,
+      "missing": 0,
+      "http_requests": 4315,
+      "duplicates_seen": 0,
+      "bad_signatures": 0,
+      "p50_ms": 13410.111665725708,
+      "p95_ms": 65543.56513023376
+    },
+    {
+      "endpoint": "slow",
+      "expected": 3000,
+      "delivered": 3000,
+      "missing": 0,
+      "http_requests": 3020,
+      "duplicates_seen": 20,
+      "bad_signatures": 0,
+      "p50_ms": 67667.55449771881,
+      "p95_ms": 122574.15044307709
+    },
+    {
+      "endpoint": "outage",
+      "expected": 3000,
+      "delivered": 3000,
+      "missing": 0,
+      "http_requests": 3017,
+      "duplicates_seen": 0,
+      "bad_signatures": 0,
+      "p50_ms": 17191.570162773132,
+      "p95_ms": 20291.64901971817
+    }
+  ]
+}

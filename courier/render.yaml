@@ -1,0 +1,26 @@
+# One-click deploy on Render (render.com): New > Blueprint > point at this repo.
+# Creates PostgreSQL, the API (public) and one worker. Check Render's current
+# plans and pricing before deploying; background workers may not be free.
+databases:
+  - name: courier-db
+    databaseName: courier
+
+services:
+  - type: web
+    name: courier-api
+    runtime: docker
+    dockerCommand: python -m courier api --port 10000
+    healthCheckPath: /health
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: courier-db, property: connectionString }
+      - key: COURIER_API_KEY
+        generateValue: true
+
+  - type: worker
+    name: courier-worker
+    runtime: docker
+    dockerCommand: python -m courier worker
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase: { name: courier-db, property: connectionString }

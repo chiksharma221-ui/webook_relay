@@ -1,0 +1,319 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Courier · delivery console</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #eef1f4; --panel: #ffffff; --ink: #14202b; --muted: #5d6b78; --line: #d7dde3;
+    --ok: #17845a; --ok-bg: #e3f4ec; --warn: #a76800; --warn-bg: #fdf1dc;
+    --bad: #b8322b; --bad-bg: #fbe5e3; --info: #2457a6; --info-bg: #e4ecf9;
+    --radius: 6px;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg: #0f151b; --panel: #172029; --ink: #e3e9ef; --muted: #8d9aa7; --line: #2a3642;
+      --ok: #4cc58f; --ok-bg: #12301f; --warn: #e8a93a; --warn-bg: #33270e;
+      --bad: #f0736b; --bad-bg: #3a1716; --info: #7aa7ef; --info-bg: #15243b;
+    }
+  }
+  * { box-sizing: border-box; }
+  [hidden] { display: none !important; }
+  body { margin: 0; background: var(--bg); color: var(--ink); font: 14px/1.5 "IBM Plex Sans", system-ui, sans-serif; }
+  .mono { font-family: "IBM Plex Mono", ui-monospace, monospace; font-size: 12.5px; }
+  header { display: flex; align-items: center; gap: 16px; padding: 14px 24px; border-bottom: 1px solid var(--line); background: var(--panel); flex-wrap: wrap; }
+  header h1 { font-size: 17px; margin: 0; font-weight: 600; }
+  header .live { color: var(--muted); font-size: 13px; display: flex; align-items: center; gap: 6px; }
+  header .live i { width: 8px; height: 8px; border-radius: 50%; background: var(--ok); display: inline-block; }
+  header .live.down i { background: var(--bad); }
+  header .spacer { flex: 1; }
+  main { max-width: 1240px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 18px; }
+  main > *, .two > * { min-width: 0; }
+  section { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); }
+  section > h2 { font-size: 14px; font-weight: 600; margin: 0; padding: 12px 16px; border-bottom: 1px solid var(--line); display: flex; align-items: center; gap: 8px 12px; flex-wrap: wrap; }
+  section > h2 .hint { font-weight: 400; color: var(--muted); font-size: 13px; }
+  .pipeline { display: grid; grid-template-columns: repeat(4, 1fr); }
+  .stage { padding: 16px; border-right: 1px solid var(--line); }
+  .stage:last-child { border-right: 0; }
+  .stage .n { font-size: 30px; font-weight: 600; letter-spacing: -0.5px; font-variant-numeric: tabular-nums; }
+  .stage .label { color: var(--muted); font-size: 13px; }
+  .stage.pending .n { color: var(--info); } .stage.delivering .n { color: var(--warn); }
+  .stage.succeeded .n { color: var(--ok); } .stage.dead .n { color: var(--bad); }
+  .health { display: flex; gap: 28px; padding: 10px 16px; border-top: 1px solid var(--line); color: var(--muted); font-size: 13px; flex-wrap: wrap; }
+  .health b { color: var(--ink); font-weight: 600; font-variant-numeric: tabular-nums; }
+  .chart { padding: 12px 16px 16px; }
+  .chart svg { width: 100%; height: 120px; display: block; }
+  .legend { display: flex; gap: 16px; color: var(--muted); font-size: 12px; padding: 0 16px 12px; }
+  .legend span::before { content: ""; display: inline-block; width: 10px; height: 10px; border-radius: 2px; margin-right: 6px; vertical-align: -1px; background: var(--c); }
+  .two { display: grid; grid-template-columns: 1fr 1fr; gap: 18px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { text-align: left; padding: 8px 12px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  th { font-weight: 500; color: var(--muted); font-size: 12.5px; }
+  tbody tr:last-child td { border-bottom: 0; }
+  tbody tr.click { cursor: pointer; } tbody tr.click:hover { background: var(--bg); }
+  td.num { text-align: right; font-variant-numeric: tabular-nums; }
+  td.err { max-width: 280px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .badge { display: inline-block; padding: 1px 8px; border-radius: 10px; font-size: 12px; font-weight: 500; white-space: nowrap; }
+  .b-succeeded, .b-closed { background: var(--ok-bg); color: var(--ok); }
+  .b-pending, .b-half_open { background: var(--info-bg); color: var(--info); }
+  .b-delivering { background: var(--warn-bg); color: var(--warn); }
+  .b-dead, .b-open, .b-disabled { background: var(--bad-bg); color: var(--bad); }
+  button, input, textarea, select { font: inherit; color: inherit; }
+  button { background: var(--panel); border: 1px solid var(--line); border-radius: 5px; padding: 4px 10px; cursor: pointer; }
+  button:hover { border-color: var(--muted); }
+  button.primary { background: var(--ink); color: var(--panel); border-color: var(--ink); }
+  button:focus-visible, input:focus-visible, textarea:focus-visible { outline: 2px solid var(--info); outline-offset: 1px; }
+  input, textarea { background: var(--bg); border: 1px solid var(--line); border-radius: 5px; padding: 6px 8px; width: 100%; }
+  textarea { min-height: 70px; resize: vertical; }
+  form { padding: 14px 16px; display: grid; gap: 10px; }
+  form label { display: grid; gap: 4px; font-size: 13px; color: var(--muted); }
+  .row { display: flex; gap: 8px; align-items: center; }
+  .tabs { display: flex; gap: 4px; margin-left: auto; }
+  .tabs button { border: 0; background: transparent; color: var(--muted); padding: 2px 8px; }
+  .tabs button.on { color: var(--ink); background: var(--bg); }
+  .empty { padding: 18px 16px; color: var(--muted); }
+  .note { font-size: 12.5px; color: var(--muted); }
+  .secret { background: var(--warn-bg); color: var(--ink); padding: 8px 10px; border-radius: 5px; word-break: break-all; }
+  dialog { border: 1px solid var(--line); border-radius: var(--radius); background: var(--panel); color: var(--ink); width: min(760px, 94vw); padding: 0; }
+  dialog::backdrop { background: rgb(0 0 0 / 0.35); }
+  dialog header { border-radius: var(--radius) var(--radius) 0 0; }
+  .dlg-body { padding: 16px; display: grid; gap: 16px; max-height: 70vh; overflow: auto; }
+  pre { margin: 0; background: var(--bg); padding: 10px; border-radius: 5px; overflow: auto; }
+  .timeline { list-style: none; margin: 6px 0 0; padding: 0; }
+  .timeline li { display: grid; grid-template-columns: 64px 92px 1fr 70px; gap: 8px; padding: 4px 0; border-bottom: 1px dashed var(--line); font-size: 13px; }
+  .scroll { overflow-x: auto; }
+  @media (max-width: 860px) {
+    .two { grid-template-columns: 1fr; }
+    .pipeline { grid-template-columns: repeat(2, 1fr); }
+    .stage:nth-child(2) { border-right: 0; }
+    .stage:nth-child(-n+2) { border-bottom: 1px solid var(--line); }
+  }
+  @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+</style>
+</head>
+<body>
+<header>
+  <h1>Courier</h1>
+  <span class="live" id="live"><i></i><span>connecting…</span></span>
+  <span class="spacer"></span>
+  <label class="row note" id="keyBox" hidden>API key <input id="apiKey" type="password" style="width:180px"></label>
+  <a class="note" href="/docs">API docs</a>
+</header>
+
+<main>
+  <section aria-label="Delivery pipeline">
+    <div class="pipeline">
+      <div class="stage pending"><div class="n" id="n-pending">–</div><div class="label">Waiting (pending + retrying)</div></div>
+      <div class="stage delivering"><div class="n" id="n-delivering">–</div><div class="label">Being delivered now</div></div>
+      <div class="stage succeeded"><div class="n" id="n-succeeded">–</div><div class="label">Delivered</div></div>
+      <div class="stage dead"><div class="n" id="n-dead">–</div><div class="label">Dead-lettered</div></div>
+    </div>
+    <div class="health">
+      <span>Success rate, last 5 min: <b id="h-rate">–</b></span>
+      <span>Response time p50 / p95: <b id="h-lat">–</b></span>
+      <span>Queue lag (oldest due): <b id="h-lag">–</b></span>
+    </div>
+  </section>
+
+  <section>
+    <h2>Delivery attempts per minute <span class="hint">last 30 minutes</span></h2>
+    <div class="chart"><svg id="chart" role="img" aria-label="Attempts per minute"></svg></div>
+    <div class="legend"><span style="--c: var(--ok)">delivered</span><span style="--c: var(--bad)">failed (will retry or dead-letter)</span></div>
+  </section>
+
+  <section>
+    <h2>Endpoints <span class="hint">each receiver, with its circuit breaker state</span></h2>
+    <div class="scroll"><table>
+      <thead><tr><th>URL</th><th>Circuit</th><th class="num">Waiting</th><th class="num">In flight</th><th class="num">Delivered</th><th class="num">Dead</th><th></th></tr></thead>
+      <tbody id="endpoints"></tbody>
+    </table></div>
+  </section>
+
+  <section>
+    <h2>Deliveries <span class="hint">latest 15 · click one for its full attempt history</span>
+      <span class="tabs" id="tabs">
+        <button data-s="" class="on">All</button><button data-s="pending">Waiting</button>
+        <button data-s="delivering">In flight</button><button data-s="succeeded">Delivered</button><button data-s="dead">Dead</button>
+      </span>
+    </h2>
+    <div class="scroll"><table>
+      <thead><tr><th>Event</th><th>Endpoint</th><th>Status</th><th class="num">Attempts</th><th>Last result</th><th>Next try</th><th></th></tr></thead>
+      <tbody id="deliveries"></tbody>
+    </table></div>
+  </section>
+
+  <div class="two">
+    <section>
+      <h2>Send a test event</h2>
+      <form id="sendForm">
+        <label>Event type <input name="event_type" value="payment.succeeded" required></label>
+        <label>Payload (JSON object) <textarea name="payload" class="mono">{"order_id": 123, "amount": 500}</textarea></label>
+        <div class="row"><button class="primary">Send event</button><span class="note" id="sendMsg"></span></div>
+      </form>
+    </section>
+    <section>
+      <h2>Register an endpoint</h2>
+      <form id="epForm">
+        <label>URL <input name="url" placeholder="https://your-app.example.com/webhooks" required></label>
+        <label>Event types <input name="event_types" placeholder="leave empty for all, or: payment.succeeded, order.shipped"></label>
+        <div class="row"><button class="primary">Register</button><span class="note" id="epMsg"></span></div>
+        <div id="secretBox" hidden></div>
+      </form>
+    </section>
+  </div>
+</main>
+
+<dialog id="dlg">
+  <header><h1 id="dlgTitle" class="mono">Event</h1><span class="spacer"></span><button onclick="dlg.close()">Close</button></header>
+  <div class="dlg-body" id="dlgBody"></div>
+</dialog>
+
+<script>
+const $ = (id) => document.getElementById(id);
+let statusFilter = "";
+let apiKey = "";
+try { apiKey = sessionStorage.getItem("courierKey") || ""; } catch (_) {}
+$("apiKey").value = apiKey;
+$("apiKey").addEventListener("change", (e) => {
+  apiKey = e.target.value.trim();
+  try { sessionStorage.setItem("courierKey", apiKey); } catch (_) {}
+  refresh();
+});
+
+async function api(path, opts = {}) {
+  const headers = { "content-type": "application/json", ...(opts.headers || {}) };
+  if (apiKey) headers.authorization = "Bearer " + apiKey;
+  const r = await fetch(path, { ...opts, headers });
+  if (r.status === 401) { $("keyBox").hidden = false; throw new Error("API key required"); }
+  if (!r.ok) throw new Error((await r.json().catch(() => ({}))).detail || r.statusText);
+  return r.status === 204 ? null : r.json();
+}
+
+const esc = (s) => String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
+const fmt = (n) => Number(n).toLocaleString();
+function ago(ts, future) {
+  if (!ts) return "";
+  const s = Math.round((new Date(ts) - Date.now()) / 1000) * (future ? 1 : -1);
+  if (future && s <= 0) return "now";
+  const a = Math.abs(s);
+  const t = a < 60 ? a + "s" : a < 3600 ? Math.round(a / 60) + "m" : Math.round(a / 3600) + "h";
+  return future ? "in " + t : t + " ago";
+}
+const label = { pending: "waiting", delivering: "in flight", succeeded: "delivered", dead: "dead", closed: "healthy", half_open: "probing", open: "open", disabled: "disabled" };
+const badge = (s) => `<span class="badge b-${s}">${label[s] || s}</span>`;
+
+function drawChart(rows) {
+  const svg = $("chart"), W = svg.clientWidth || 800, H = 120, pad = 18;
+  const now = new Date(); now.setSeconds(0, 0);
+  const mins = [...Array(30)].map((_, i) => new Date(now - (29 - i) * 60000).getTime());
+  const byMin = Object.fromEntries(rows.map((r) => [new Date(r.minute).getTime(), r]));
+  const data = mins.map((m) => byMin[m] || { ok: 0, failed: 0 });
+  const max = Math.max(1, ...data.map((d) => d.ok + d.failed));
+  const bw = (W - 40) / data.length;
+  let out = `<text x="0" y="12" font-size="11" fill="currentColor" opacity=".6">${fmt(max)}</text>`;
+  data.forEach((d, i) => {
+    const x = 40 + i * bw, hOk = (d.ok / max) * (H - pad), hBad = (d.failed / max) * (H - pad);
+    out += `<rect x="${x}" y="${H - hOk}" width="${bw - 2}" height="${hOk}" fill="var(--ok)"><title>${fmt(d.ok)} delivered</title></rect>`;
+    out += `<rect x="${x}" y="${H - hOk - hBad}" width="${bw - 2}" height="${hBad}" fill="var(--bad)"><title>${fmt(d.failed)} failed</title></rect>`;
+  });
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  svg.innerHTML = out;
+}
+
+async function refresh() {
+  try {
+    const [stats, eps, dels] = await Promise.all([
+      api("/v1/stats"), api("/v1/endpoints"),
+      api("/v1/deliveries?limit=15" + (statusFilter ? "&status=" + statusFilter : "")),
+    ]);
+    for (const k of ["pending", "delivering", "succeeded", "dead"]) $("n-" + k).textContent = fmt(stats.deliveries[k]);
+    const w = stats.last_5_min;
+    $("h-rate").textContent = w.success_rate == null ? "no traffic" : (w.success_rate * 100).toFixed(1) + "%";
+    $("h-lat").textContent = w.p50_ms == null ? "–" : `${Math.round(w.p50_ms)} / ${Math.round(w.p95_ms)} ms`;
+    $("h-lag").textContent = stats.oldest_due_seconds < 1 ? "none" : stats.oldest_due_seconds.toFixed(1) + "s";
+    drawChart(stats.per_minute);
+
+    $("endpoints").innerHTML = eps.length ? eps.map((e) => `<tr>
+      <td class="mono">${esc(e.url)}${e.disabled_reason ? `<div class="note">${esc(e.disabled_reason)}</div>` : ""}</td>
+      <td>${badge(e.circuit)}</td><td class="num">${fmt(e.pending)}</td><td class="num">${fmt(e.delivering)}</td>
+      <td class="num">${fmt(e.succeeded)}</td><td class="num">${fmt(e.dead)}</td>
+      <td class="row">${e.dead > 0 ? `<button data-replay-ep="${e.id}">Replay dead</button>` : ""}
+        <button data-toggle="${e.id}" data-enabled="${e.enabled}">${e.enabled ? "Disable" : "Enable"}</button></td>
+    </tr>`).join("") : `<tr><td colspan="7" class="empty">No endpoints yet. Register one below.</td></tr>`;
+
+    $("deliveries").innerHTML = dels.length ? dels.map((d) => `<tr class="click" data-event="${d.event_id}">
+      <td><span class="mono">${esc(d.event_type)}</span><div class="note mono">${d.event_id.slice(0, 8)}</div></td>
+      <td class="mono">${esc(d.url)}</td><td>${badge(d.status)}</td><td class="num">${d.attempt_count}</td>
+      <td class="err" title="${esc(d.last_error || "")}">${d.status === "succeeded" ? `HTTP ${d.last_status_code}` : esc(d.last_error || "")}</td>
+      <td class="note">${d.status === "pending" ? ago(d.next_attempt_at, true) : d.delivered_at ? ago(d.delivered_at) : ""}</td>
+      <td>${["dead", "succeeded"].includes(d.status) ? `<button data-replay="${d.id}">Replay</button>` : ""}</td>
+    </tr>`).join("") : `<tr><td colspan="7" class="empty">Nothing here. Send a test event to see it flow through.</td></tr>`;
+
+    $("live").className = "live";
+    $("live").lastElementChild.textContent = "live · updates every 2s";
+  } catch (err) {
+    $("live").className = "live down";
+    $("live").lastElementChild.textContent = err.message;
+  }
+}
+
+document.addEventListener("click", async (e) => {
+  const t = e.target;
+  try {
+    if (t.dataset.replay) { e.stopPropagation(); await api(`/v1/deliveries/${t.dataset.replay}/replay`, { method: "POST" }); }
+    else if (t.dataset.replayEp) { await api(`/v1/endpoints/${t.dataset.replayEp}/replay-dead`, { method: "POST" }); }
+    else if (t.dataset.toggle) {
+      await api(`/v1/endpoints/${t.dataset.toggle}`, { method: "PATCH", body: JSON.stringify({ enabled: t.dataset.enabled !== "true" }) });
+    } else if (t.closest("#tabs button")) {
+      statusFilter = t.dataset.s;
+      document.querySelectorAll("#tabs button").forEach((b) => b.classList.toggle("on", b === t));
+    } else if (t.closest("tr[data-event]")) { return showEvent(t.closest("tr").dataset.event); }
+    else return;
+    refresh();
+  } catch (err) { alertInline(err.message); }
+});
+
+function alertInline(msg) { $("live").className = "live down"; $("live").lastElementChild.textContent = msg; }
+
+async function showEvent(id) {
+  const ev = await api("/v1/events/" + id);
+  $("dlgTitle").textContent = ev.event_type + " · " + id.slice(0, 8);
+  $("dlgBody").innerHTML = `<div><div class="note">Payload</div><pre class="mono">${esc(JSON.stringify(ev.payload, null, 2))}</pre></div>` +
+    ev.deliveries.map((d) => `<div><div class="row"><span class="mono">${esc(d.url)}</span>${badge(d.status)}</div>
+      <ul class="timeline">${d.attempts.map((a) => `<li><span>#${a.attempt_no}</span><span>${new Date(a.started_at).toLocaleTimeString()}</span>
+        <span>${a.status_code ? "HTTP " + a.status_code : esc(a.error)}</span><span class="note">${a.duration_ms} ms</span></li>`).join("")
+        || '<li><span class="note">no attempts yet</span></li>'}</ul></div>`).join("");
+  $("dlg").showModal();
+}
+
+$("sendForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  try {
+    const r = await api("/v1/events", { method: "POST", body: JSON.stringify({ event_type: f.get("event_type"), payload: JSON.parse(f.get("payload")) }) });
+    $("sendMsg").textContent = `Accepted, queued for ${r.deliveries} endpoint(s).`;
+    refresh();
+  } catch (err) { $("sendMsg").textContent = err instanceof SyntaxError ? "Payload is not valid JSON." : String(err.message); }
+});
+
+$("epForm").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const f = new FormData(e.target);
+  const types = f.get("event_types").split(",").map((s) => s.trim()).filter(Boolean);
+  try {
+    const r = await api("/v1/endpoints", { method: "POST", body: JSON.stringify({ url: f.get("url"), event_types: types.length ? types : null }) });
+    $("epMsg").textContent = "Registered.";
+    $("secretBox").hidden = false;
+    $("secretBox").innerHTML = `<div class="note">Signing secret. Copy it now; it won't be shown again.</div><div class="secret mono">${esc(r.secret)}</div>`;
+    e.target.reset(); refresh();
+  } catch (err) { $("epMsg").textContent = typeof err.message === "string" ? err.message : JSON.stringify(err.message); }
+});
+
+refresh();
+setInterval(refresh, 2000);
+</script>
+</body>
+</html>
